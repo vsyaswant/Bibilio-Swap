@@ -4,9 +4,11 @@ import Header from './components/Header';
 import BookCard from './components/BookCard';
 import BookScanner from './components/BookScanner';
 import DiscoverView from './components/DiscoverView';
-import { Book, UserProfile, ReadingStatus, PrivacyMode, Friend } from './types';
+import LandingPage from './components/LandingPage';
+import AuthView from './components/AuthView';
+import { Book, UserProfile, ReadingStatus, PrivacyMode, TradeRequest } from './types';
 
-// Mock data for other users
+// Mock data for other users with society info
 const MOCK_OTHER_USERS: UserProfile[] = [
   {
     id: 'user-2',
@@ -14,6 +16,7 @@ const MOCK_OTHER_USERS: UserProfile[] = [
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
     privacy: PrivacyMode.PUBLIC,
     friends: [],
+    society: 'My Home Abhra',
     library: [
       {
         id: 'b1',
@@ -23,7 +26,8 @@ const MOCK_OTHER_USERS: UserProfile[] = [
         summary: 'A lone astronaut must save the Earth from an extinction-level threat.',
         coverUrl: 'https://picsum.photos/seed/hailmary/400/600',
         status: ReadingStatus.PAST,
-        addedAt: Date.now()
+        addedAt: Date.now(),
+        language: 'English'
       },
       {
         id: 'b2',
@@ -33,7 +37,8 @@ const MOCK_OTHER_USERS: UserProfile[] = [
         summary: 'The story of two childhood friends who become creative partners in the world of video game design.',
         coverUrl: 'https://picsum.photos/seed/tomorrow/400/600',
         status: ReadingStatus.CURRENT,
-        addedAt: Date.now()
+        addedAt: Date.now(),
+        language: 'English'
       }
     ]
   },
@@ -43,27 +48,51 @@ const MOCK_OTHER_USERS: UserProfile[] = [
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Marcus',
     privacy: PrivacyMode.PUBLIC,
     friends: [],
+    society: 'Lansum Etania',
     library: [
       {
         id: 'b3',
         title: 'Dune',
         author: 'Frank Herbert',
         genre: 'Sci-Fi',
-        summary: 'Set in the distant future amidst a huge interstellar empire, where a young noble becomes a messiah.',
+        summary: 'Set in the distant future amidst a huge interstellar empire.',
         coverUrl: 'https://picsum.photos/seed/dune/400/600',
         status: ReadingStatus.OWNED,
-        addedAt: Date.now()
+        addedAt: Date.now(),
+        language: 'English'
       }
     ]
   }
 ];
 
+const MOCK_TRADES: TradeRequest[] = [
+  { 
+    id: 't1', 
+    bookTitle: 'System Design Interview', 
+    fromUser: 'Rahul (Tech Circle)', 
+    status: 'approved', 
+    type: 'incoming',
+    dropOffNote: 'Left at Gate 2 Security Kiosk'
+  },
+  { 
+    id: 't2', 
+    bookTitle: 'Telugu Mahasabhalu', 
+    fromUser: 'Srinivas', 
+    status: 'pending', 
+    type: 'outgoing',
+    dropOffNote: 'Meeting at Clubhouse Cafe @ 7PM'
+  }
+];
+
 const App: React.FC = () => {
+  const [authStep, setAuthStep] = useState<'landing' | 'login' | 'signup' | 'authenticated'>(() => {
+    return localStorage.getItem('biblio_auth') === 'true' ? 'authenticated' : 'landing';
+  });
   const [view, setView] = useState<'library' | 'discover' | 'friends'>('library');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<ReadingStatus | 'All'>('All');
+  const [languageFilter, setLanguageFilter] = useState<'All' | 'English' | 'Telugu' | 'Hindi'>('All');
   
-  // Persisted state
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
     const saved = localStorage.getItem('biblio_user');
     return saved ? JSON.parse(saved) : {
@@ -71,19 +100,28 @@ const App: React.FC = () => {
       name: 'Alex Reader',
       avatar: 'https://api.dicebear.com/7.x/initials/svg?seed=Alex',
       privacy: PrivacyMode.PUBLIC,
-      friends: ['user-2'], // Alex is friends with Sarah
-      library: []
+      friends: ['user-2'], 
+      library: [],
+      location: 'Gachibowli, Hyderabad',
+      society: 'My Home Abhra'
     };
   });
 
   useEffect(() => {
     localStorage.setItem('biblio_user', JSON.stringify(userProfile));
-  }, [userProfile]);
+    localStorage.setItem('biblio_auth', (authStep === 'authenticated').toString());
+  }, [userProfile, authStep]);
+
+  const featuredBooks = useMemo(() => {
+    return MOCK_OTHER_USERS.flatMap(u => u.library);
+  }, []);
 
   const filteredBooks = useMemo(() => {
-    if (activeFilter === 'All') return userProfile.library;
-    return userProfile.library.filter(b => b.status === activeFilter);
-  }, [userProfile.library, activeFilter]);
+    let books = userProfile.library;
+    if (activeFilter !== 'All') books = books.filter(b => b.status === activeFilter);
+    if (languageFilter !== 'All') books = books.filter(b => b.language === languageFilter);
+    return books;
+  }, [userProfile.library, activeFilter, languageFilter]);
 
   const handleBookDetected = (bookData: any, coverImage: string) => {
     const newBook: Book = {
@@ -96,12 +134,10 @@ const App: React.FC = () => {
       coverUrl: coverImage,
       status: ReadingStatus.OWNED,
       addedAt: Date.now(),
+      language: 'English'
     };
 
-    setUserProfile(prev => ({
-      ...prev,
-      library: [newBook, ...prev.library]
-    }));
+    setUserProfile(prev => ({ ...prev, library: [newBook, ...prev.library] }));
     setIsScannerOpen(false);
   };
 
@@ -113,7 +149,7 @@ const App: React.FC = () => {
   };
 
   const handleDeleteBook = (bookId: string) => {
-    if (confirm("Remove this book from your library?")) {
+    if (confirm("Remove this book?")) {
       setUserProfile(prev => ({
         ...prev,
         library: prev.library.filter(b => b.id !== bookId)
@@ -121,94 +157,194 @@ const App: React.FC = () => {
     }
   };
 
-  const togglePrivacy = () => {
+  const handleAuthSuccess = (userData: { name: string; society: string }) => {
     setUserProfile(prev => ({
       ...prev,
-      privacy: prev.privacy === PrivacyMode.PUBLIC ? PrivacyMode.PRIVATE : PrivacyMode.PUBLIC
+      name: userData.name,
+      society: userData.society
     }));
+    setAuthStep('authenticated');
   };
+
+  if (authStep === 'landing') {
+    return <LandingPage onJoin={() => setAuthStep('signup')} featuredBooks={featuredBooks} />;
+  }
+
+  if (authStep === 'login' || authStep === 'signup') {
+    return (
+      <AuthView 
+        mode={authStep} 
+        onAuthSuccess={handleAuthSuccess}
+        onToggleMode={() => setAuthStep(authStep === 'login' ? 'signup' : 'login')}
+        onBack={() => setAuthStep('landing')}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <Header currentView={view} setView={setView} userName={userProfile.name} />
+      <Header currentView={view} setView={setView} userName={userProfile.name} societyName={userProfile.society} />
 
-      <main className="flex-grow max-w-6xl mx-auto px-4 w-full">
+      <main className="flex-grow max-w-6xl mx-auto px-4 w-full py-8">
         {view === 'library' && (
-          <div className="py-8 space-y-8">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-              <div>
-                <div className="flex items-center space-x-3 mb-1">
-                  <h1 className="text-3xl font-extrabold text-slate-900">Your Library</h1>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest ${userProfile.privacy === PrivacyMode.PUBLIC ? 'bg-indigo-100 text-indigo-700' : 'bg-rose-100 text-rose-700'}`}>
-                    {userProfile.privacy}
-                  </span>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            {/* Left Content Area: Dashboard */}
+            <div className="lg:col-span-3 space-y-10">
+              
+              {/* Active Logistics Rail */}
+              <section className="bg-indigo-900 rounded-[2rem] p-8 text-white shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-10">
+                  <svg className="w-24 h-24" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
                 </div>
-                <p className="text-slate-500">Manage your collection, reading progress, and rentals.</p>
-              </div>
+                <div className="flex items-center justify-between mb-6 relative z-10">
+                  <div>
+                    <h2 className="text-2xl font-black flex items-center">Clubhouse Exchange</h2>
+                    <p className="text-indigo-200 text-sm">Ongoing trades in {userProfile.society}</p>
+                  </div>
+                  <button className="bg-white/10 hover:bg-white/20 p-2 rounded-xl transition-colors">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
+                  </button>
+                </div>
+                <div className="flex space-x-6 overflow-x-auto pb-4 scrollbar-hide relative z-10">
+                  {MOCK_TRADES.map(trade => (
+                    <div key={trade.id} className="bg-white/10 backdrop-blur-md rounded-2xl p-5 min-w-[280px] border border-white/10 group">
+                      <div className="flex items-start justify-between mb-3">
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-widest ${trade.status === 'pending' ? 'bg-amber-400 text-amber-950' : 'bg-green-400 text-green-950'}`}>
+                          {trade.status}
+                        </span>
+                        <p className="text-[10px] text-indigo-300 font-bold uppercase">{trade.type}</p>
+                      </div>
+                      <h4 className="font-bold text-base mb-1 truncate">{trade.bookTitle}</h4>
+                      <p className="text-xs text-indigo-100 mb-4">Partner: <span className="font-bold">{trade.fromUser}</span></p>
+                      {trade.dropOffNote && (
+                        <div className="flex items-center space-x-2 text-[10px] bg-white/5 p-2 rounded-lg italic text-indigo-200">
+                          <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>
+                          <span className="truncate">{trade.dropOffNote}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <button 
-                  onClick={togglePrivacy}
-                  className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium hover:bg-white transition-colors flex items-center space-x-2"
-                >
-                  {userProfile.privacy === PrivacyMode.PUBLIC ? (
-                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg><span>Make Private</span></>
-                  ) : (
-                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A10.003 10.003 0 0012 21a10.003 10.003 0 008.384-4.51m-2.408-4.46A10.003 10.003 0 0112 15c-3.177 0-6.156-1.475-8.126-3.844m16.252 0c.053.051.106.102.16.152M5.5 5.5l13 13" /></svg><span>Make Public</span></>
-                  )}
-                </button>
-                <button 
-                  onClick={() => setIsScannerOpen(true)}
-                  className="px-6 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center space-x-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span>Add New Book</span>
-                </button>
+              {/* Shelf Controls & Library */}
+              <div className="space-y-8">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                  <div>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">Your Bookshelf</h1>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{userProfile.society}</span>
+                      <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest">Resident Library</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                     <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                        {['All', 'English', 'Telugu'].map(lang => (
+                          <button 
+                            key={lang}
+                            onClick={() => setLanguageFilter(lang as any)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${languageFilter === lang ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                          >
+                            {lang}
+                          </button>
+                        ))}
+                     </div>
+                    <button 
+                      onClick={() => setIsScannerOpen(true)}
+                      className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all flex items-center space-x-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                      <span>Add Book</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3 overflow-x-auto pb-2 scrollbar-hide">
+                  {['All', ...Object.values(ReadingStatus)].map(filter => (
+                    <button
+                      key={filter}
+                      onClick={() => setActiveFilter(filter as any)}
+                      className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeFilter === filter ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white border border-slate-200 text-slate-400 hover:text-slate-900'}`}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+
+                {filteredBooks.length === 0 ? (
+                  <div className="bg-white border border-slate-200 rounded-3xl p-20 text-center shadow-sm">
+                    <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6">📚</div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">Shelf empty</h3>
+                    <p className="text-slate-500 max-w-sm mx-auto mb-8 text-sm">Start scanning books to join the {userProfile.society} community circle.</p>
+                    <button onClick={() => setIsScannerOpen(true)} className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-xl shadow-indigo-100">Open Scanner</button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-8">
+                    {filteredBooks.map(book => (
+                      <BookCard key={book.id} book={book} onStatusChange={handleStatusChange} onDelete={handleDeleteBook} />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center space-x-2 overflow-x-auto pb-2 scrollbar-hide">
-              {['All', ...Object.values(ReadingStatus)].map(filter => (
-                <button
-                  key={filter}
-                  onClick={() => setActiveFilter(filter as any)}
-                  className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${activeFilter === filter ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-300'}`}
-                >
-                  {filter}
-                </button>
-              ))}
-            </div>
+            {/* Sidebar: Clubhouse Community */}
+            <aside className="space-y-8">
+               <div className="bg-white rounded-[2rem] border border-slate-200 p-8 shadow-sm">
+                 <h3 className="font-black text-slate-900 mb-6 uppercase tracking-widest text-xs">Society Leaderboard</h3>
+                 <div className="space-y-6">
+                    {[
+                      { name: 'Srinivas R.', count: 124, icon: '🥇' },
+                      { name: 'Sarah Chen', count: 98, icon: '🥈' },
+                      { name: 'Rahul V.', count: 45, icon: '🥉' }
+                    ].map((leader, i) => (
+                      <div key={leader.name} className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <span className="text-lg">{leader.icon}</span>
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">{leader.name}</p>
+                            <p className="text-[10px] text-slate-400 uppercase font-bold">{leader.count} Books Shared</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                 </div>
+                 <button className="w-full mt-8 py-3 text-xs font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 rounded-xl hover:bg-indigo-100 transition-colors">View All Residents</button>
+               </div>
 
-            {filteredBooks.length === 0 ? (
-              <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center">
-                <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <svg className="w-10 h-10 text-indigo-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 mb-2">Your shelf is empty</h3>
-                <p className="text-slate-500 max-w-sm mx-auto mb-8">Start building your digital library by scanning your physical books. It's the best way to track and share your reading journey.</p>
-                <button 
-                  onClick={() => setIsScannerOpen(true)}
-                  className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
-                >
-                  Scan your first book
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                {filteredBooks.map(book => (
-                  <BookCard 
-                    key={book.id} 
-                    book={book} 
-                    onStatusChange={handleStatusChange}
-                    onDelete={handleDeleteBook}
-                  />
-                ))}
-              </div>
-            )}
+               <div className="bg-amber-500 rounded-[2rem] p-8 text-white shadow-xl">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-black text-xs uppercase tracking-widest">Kids Academic Hub</h4>
+                    <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">New</span>
+                  </div>
+                  <p className="text-xs text-indigo-100 mb-6 leading-relaxed">Exchange IB, ICSE & Olympiad prep materials with other parents in {userProfile.society}.</p>
+                  <div className="flex -space-x-3 mb-6">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="w-12 h-16 rounded-lg bg-white border-2 border-amber-500 shadow-xl overflow-hidden">
+                        <img src={`https://picsum.photos/seed/kidsbook${i}/100/150`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                    <div className="w-12 h-16 rounded-lg bg-amber-600 border-2 border-amber-500 shadow-xl flex items-center justify-center text-[10px] font-bold">+24</div>
+                  </div>
+                  <button className="w-full py-3 bg-white text-amber-600 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-amber-50 transition-all">Explore Hub</button>
+               </div>
+
+               <div className="bg-slate-900 rounded-[2rem] p-8 text-white shadow-2xl">
+                  <h4 className="font-black text-xs uppercase tracking-widest mb-4">Book-Pool: Startup Circle</h4>
+                  <p className="text-xs text-slate-400 mb-6 leading-relaxed">Exclusive collection shared by entrepreneurs in {userProfile.society}.</p>
+                  <div className="flex -space-x-3 mb-6">
+                    {[1, 2, 3, 4].map(i => (
+                      <div key={i} className="w-12 h-16 rounded-lg bg-slate-800 border-2 border-slate-900 shadow-xl overflow-hidden">
+                        <img src={`https://picsum.photos/seed/tech${i}/100/150`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                    <div className="w-12 h-16 rounded-lg bg-indigo-600 border-2 border-slate-900 shadow-xl flex items-center justify-center text-[10px] font-bold">+12</div>
+                  </div>
+                  <button className="w-full py-3 bg-white text-slate-900 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-100 transition-all">Join Pool</button>
+               </div>
+            </aside>
           </div>
         )}
 
@@ -217,47 +353,36 @@ const App: React.FC = () => {
         {view === 'friends' && (
           <div className="py-8 space-y-8">
              <div className="max-w-2xl">
-              <h1 className="text-3xl font-extrabold text-slate-900 mb-2">Friends</h1>
-              <p className="text-slate-500">Keep up with what your inner circle is reading. Private libraries are only visible to confirmed friends.</p>
+              <h1 className="text-3xl font-black text-slate-900 tracking-tight">Verified Neighbors</h1>
+              <p className="text-slate-500">Connecting with the residents of {userProfile.society}.</p>
             </div>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {MOCK_OTHER_USERS.map(friend => {
-                const isFriend = userProfile.friends.includes(friend.id);
-                return (
-                  <div key={friend.id} className="bg-white p-6 rounded-2xl border border-slate-200 flex items-center space-x-6">
-                    <img src={friend.avatar} alt={friend.name} className="w-16 h-16 rounded-full ring-4 ring-indigo-50" />
-                    <div className="flex-grow">
-                      <h3 className="font-bold text-lg text-slate-900">{friend.name}</h3>
-                      <p className="text-sm text-slate-500">{friend.library.length} Books in Collection</p>
-                    </div>
-                    <button 
-                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${isFriend ? 'bg-slate-100 text-slate-600' : 'bg-indigo-600 text-white'}`}
-                    >
-                      {isFriend ? 'Message' : 'Add Friend'}
-                    </button>
+              {MOCK_OTHER_USERS.map(friend => (
+                <div key={friend.id} className="bg-white p-6 rounded-3xl border border-slate-200 flex items-center space-x-6 hover:shadow-lg transition-shadow">
+                  <img src={friend.avatar} alt={friend.name} className="w-16 h-16 rounded-2xl ring-4 ring-indigo-50" />
+                  <div className="flex-grow">
+                    <h3 className="font-bold text-lg text-slate-900">{friend.name}</h3>
+                    <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">{friend.society}</p>
                   </div>
-                );
-              })}
+                  <button className="px-6 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">Message</button>
+                </div>
+              ))}
             </div>
           </div>
         )}
       </main>
 
       {isScannerOpen && (
-        <BookScanner 
-          onBookDetected={handleBookDetected} 
-          onClose={() => setIsScannerOpen(false)} 
-        />
+        <BookScanner onBookDetected={handleBookDetected} onClose={() => setIsScannerOpen(false)} />
       )}
 
       <footer className="mt-auto py-12 border-t border-slate-200 bg-white">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center text-slate-400 text-sm">
-          <p>© 2024 BiblioSwap. Empowering readers to share and connect.</p>
-          <div className="flex space-x-6 mt-4 md:mt-0">
-            <a href="#" className="hover:text-indigo-600 transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-indigo-600 transition-colors">Terms of Service</a>
-            <a href="#" className="hover:text-indigo-600 transition-colors">Contact Support</a>
+        <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+          <p>© 2024 BiblioSwap. Verified Society Platform.</p>
+          <div className="flex space-x-8 mt-4 md:mt-0">
+            <button onClick={() => setAuthStep('landing')} className="text-red-400 hover:text-red-500 transition-colors">Terminate Session</button>
+            <a href="#" className="hover:text-indigo-600 transition-colors">Privacy</a>
+            <a href="#" className="hover:text-indigo-600 transition-colors">Rules</a>
           </div>
         </div>
       </footer>

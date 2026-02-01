@@ -21,6 +21,16 @@ export interface Book {
   coverUrl: string;
   status: ReadingStatus;
   addedAt: number;
+  language: 'English' | 'Telugu' | 'Hindi' | 'Urdu';
+}
+
+export interface TradeRequest {
+  id: string;
+  bookTitle: string;
+  fromUser: string;
+  status: 'pending' | 'approved' | 'completed' | 'declined';
+  type: 'incoming' | 'outgoing';
+  dropOffNote?: string;
 }
 
 export interface UserProfile {
@@ -28,8 +38,10 @@ export interface UserProfile {
   name: string;
   avatar: string;
   privacy: PrivacyMode;
-  friends: string[]; // List of user IDs
+  friends: string[]; 
   library: Book[];
+  location?: string;
+  society?: string; // e.g., "My Home Abhra", "Lansum Etania"
 }
 
 export interface Friend {
