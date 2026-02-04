@@ -6,6 +6,7 @@ import BookScanner from './components/BookScanner';
 import DiscoverView from './components/DiscoverView';
 import LandingPage from './components/LandingPage';
 import AuthView from './components/AuthView';
+import { getBookRecommendations } from './services/geminiService';
 import { Book, UserProfile, ReadingStatus, PrivacyMode, TradeRequest } from './types';
 
 // Mock data for other users with society info
@@ -62,6 +63,38 @@ const MOCK_OTHER_USERS: UserProfile[] = [
         language: 'English'
       }
     ]
+  },
+  {
+    id: 'user-4',
+    name: 'Priya Reddy',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Priya',
+    privacy: PrivacyMode.PUBLIC,
+    friends: [],
+    society: 'My Home Bhooja',
+    library: [
+      {
+        id: 'b4',
+        title: 'Atomic Habits',
+        author: 'James Clear',
+        genre: 'Self-Help',
+        summary: 'A tiny changes, remarkable results strategy for habit formation.',
+        coverUrl: 'https://picsum.photos/seed/atomic/400/600',
+        status: ReadingStatus.OWNED,
+        addedAt: Date.now(),
+        language: 'English'
+      },
+      {
+        id: 'b5',
+        title: 'The Alchemist',
+        author: 'Paulo Coelho',
+        genre: 'Fiction',
+        summary: 'A fable about following your dream.',
+        coverUrl: 'https://picsum.photos/seed/alchemist/400/600',
+        status: ReadingStatus.OWNED,
+        addedAt: Date.now(),
+        language: 'English'
+      }
+    ]
   }
 ];
 
@@ -92,6 +125,8 @@ const App: React.FC = () => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<ReadingStatus | 'All'>('All');
   const [languageFilter, setLanguageFilter] = useState<'All' | 'English' | 'Telugu' | 'Hindi'>('All');
+  const [recommendations, setRecommendations] = useState<{book: Book, reason: string}[]>([]);
+  const [isRecLoading, setIsRecLoading] = useState(false);
   
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
     const saved = localStorage.getItem('biblio_user');
@@ -115,6 +150,33 @@ const App: React.FC = () => {
   const featuredBooks = useMemo(() => {
     return MOCK_OTHER_USERS.flatMap(u => u.library);
   }, []);
+
+  useEffect(() => {
+    if (authStep === 'authenticated' && userProfile.library.length > 0) {
+      const fetchRecs = async () => {
+        setIsRecLoading(true);
+        const current = userProfile.library
+          .filter(b => b.status === ReadingStatus.CURRENT)
+          .map(b => b.title);
+        const past = userProfile.library
+          .filter(b => b.status === ReadingStatus.PAST)
+          .sort((a, b) => b.addedAt - a.addedAt)
+          .slice(0, 2)
+          .map(b => b.title);
+
+        if (current.length > 0 || past.length > 0) {
+          const rawRecs = await getBookRecommendations({ current, past }, featuredBooks);
+          const mappedRecs = rawRecs.map((r: any) => ({
+            book: featuredBooks.find(b => b.id === r.bookId),
+            reason: r.reason
+          })).filter((r: any) => r.book);
+          setRecommendations(mappedRecs);
+        }
+        setIsRecLoading(false);
+      };
+      fetchRecs();
+    }
+  }, [userProfile.library, featuredBooks, authStep]);
 
   const filteredBooks = useMemo(() => {
     let books = userProfile.library;
@@ -191,6 +253,39 @@ const App: React.FC = () => {
             {/* Left Content Area: Dashboard */}
             <div className="lg:col-span-3 space-y-10">
               
+              {/* Recommendations Rail - AI Powered */}
+              {recommendations.length > 0 && (
+                <section className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm relative overflow-hidden">
+                   <div className="absolute top-0 right-0 p-4">
+                      <div className="flex items-center space-x-1 bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full border border-indigo-100">
+                        <svg className="w-3 h-3 animate-pulse" fill="currentColor" viewBox="0 0 20 20"><path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1a1 1 0 112 0v1a1 1 0 11-2 0zM13.536 14.95a1 1 0 011.414 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zM15 10a5 5 0 11-10 0 5 5 0 0110 0z" /></svg>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Clubhouse Curated</span>
+                      </div>
+                   </div>
+                   <h2 className="text-xl font-black text-slate-900 mb-6">Personalized Selections</h2>
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {recommendations.map((rec, idx) => (
+                        <div key={idx} className="flex space-x-4 items-start group">
+                           <div className="w-20 h-28 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0 shadow-md group-hover:shadow-xl transition-all group-hover:-translate-y-1 ring-1 ring-slate-200">
+                              <img src={rec.book.coverUrl} className="w-full h-full object-cover" />
+                           </div>
+                           <div className="flex-grow">
+                              <h4 className="font-bold text-sm text-slate-900 line-clamp-1">{rec.book.title}</h4>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase mb-2">{rec.book.author}</p>
+                              <div className="bg-indigo-50/50 p-2 rounded-lg border border-indigo-100/30">
+                                <p className="text-[10px] text-indigo-700 italic leading-snug">"{rec.reason}"</p>
+                              </div>
+                              <button className="mt-3 text-[10px] font-black uppercase tracking-wider text-indigo-600 hover:text-indigo-800 flex items-center">
+                                Request Trade 
+                                <svg className="w-2 h-2 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7"/></svg>
+                              </button>
+                           </div>
+                        </div>
+                      ))}
+                   </div>
+                </section>
+              )}
+
               {/* Active Logistics Rail */}
               <section className="bg-indigo-900 rounded-[2rem] p-8 text-white shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-10">

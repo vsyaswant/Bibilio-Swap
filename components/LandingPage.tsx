@@ -47,7 +47,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onJoin, featuredBooks }) => {
           <div className="max-w-md mx-auto flex flex-col sm:flex-row gap-3 shadow-2xl rounded-2xl p-2 bg-white/10 backdrop-blur-xl border border-white/20">
             <input 
               type="text" 
-              placeholder="Your Society or Zip Code" 
+              placeholder="Your Society or Pin Code" 
               className="flex-grow px-4 py-3 rounded-xl bg-transparent focus:outline-none text-white placeholder-white/50"
               value={zip}
               onChange={(e) => setZip(e.target.value)}
