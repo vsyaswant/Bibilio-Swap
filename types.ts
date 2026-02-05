@@ -6,6 +6,13 @@ export enum ReadingStatus {
   OWNED = 'Owned'
 }
 
+export enum BookCondition {
+  NEW = 'New',
+  GOOD = 'Good',
+  VINTAGE = 'Vintage',
+  WORN = 'Worn'
+}
+
 export enum PrivacyMode {
   PUBLIC = 'Public',
   PRIVATE = 'Private'
@@ -20,6 +27,8 @@ export interface Book {
   summary: string;
   coverUrl: string;
   status: ReadingStatus;
+  condition: BookCondition;
+  conditionNote?: string;
   addedAt: number;
   language: 'English' | 'Telugu' | 'Hindi' | 'Urdu';
 }
@@ -41,7 +50,7 @@ export interface UserProfile {
   friends: string[]; 
   library: Book[];
   location?: string;
-  society?: string; // e.g., "My Home Abhra", "Lansum Etania"
+  society?: string;
 }
 
 export interface Friend {
@@ -50,6 +59,7 @@ export interface Friend {
   avatar: string;
   privacy: PrivacyMode;
 }
+
 export type Row = {
   title: string;
   authors: string;

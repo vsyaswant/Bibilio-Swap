@@ -1,10 +1,9 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Book, ReadingStatus } from "../types";
+import { Book, ReadingStatus, BookCondition } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// The content of reco.csv as requested.
 export const RECO_CSV_CONTENT = `title,authors,genre,thumbnail
 Gilead,Marilynne Robinson,Fiction,http://books.google.com/books/content?id=KQZCPgAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api
 Spider's Web,Charles Osborne;Agatha Christie,Detective and mystery stories,http://books.google.com/books/content?id=gA5GPgAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api
@@ -26,16 +25,12 @@ Well of Darkness,Margaret Weis;Tracy Hickman,,http://books.google.com/books/cont
 Witness for the Prosecution & Selected Plays,Agatha Christie,English drama,http://books.google.com/books/content?id=_9u7AAAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api
 The Little House,Philippa Gregory,Country life,http://books.google.com/books/content?id=rbvUPps9vKsC&printsec=frontcover&img=1&zoom=1&source=gbs_api`;
 
-/**
- * Fetches the official cover image and metadata from Google Books API.
- */
 export async function getGoogleBooksMetadata(title: string, author?: string, isbn?: string) {
   try {
     let query = '';
     if (isbn && isbn.length > 5) {
       query = `isbn:${isbn.replace(/[^0-9X]/gi, '')}`;
     } else {
-      // Clean query for better matching
       const cleanTitle = title.replace(/[^\w\s]/gi, '');
       const cleanAuthor = author ? author.replace(/[^\w\s]/gi, '') : '';
       query = `intitle:${encodeURIComponent(cleanTitle)}${cleanAuthor ? `+inauthor:${encodeURIComponent(cleanAuthor)}` : ''}`;
@@ -45,14 +40,8 @@ export async function getGoogleBooksMetadata(title: string, author?: string, isb
     const data = await response.json();
 
     if (data.items && data.items.length > 0) {
-      // Find the best match (sometimes first isn't best if query was broad)
       const info = data.items[0].volumeInfo;
-      const cover = info.imageLinks?.extraLarge || 
-                    info.imageLinks?.large || 
-                    info.imageLinks?.medium || 
-                    info.imageLinks?.thumbnail || 
-                    info.imageLinks?.smallThumbnail;
-      
+      const cover = info.imageLinks?.extraLarge || info.imageLinks?.large || info.imageLinks?.medium || info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail;
       return {
         coverUrl: cover?.replace('http:', 'https:'),
         officialTitle: info.title,
@@ -62,32 +51,31 @@ export async function getGoogleBooksMetadata(title: string, author?: string, isb
         isbn: info.industryIdentifiers?.find((id: any) => id.type.includes('ISBN'))?.identifier
       };
     }
-  } catch (err) {
-    console.error("Google Books Fetch Error:", err);
-  }
+  } catch (err) { console.error("Google Books Fetch Error:", err); }
   return null;
 }
 
-/**
- * Parses the reco.csv content into Book objects.
- */
 export const parseRecoCSV = (csv: string): Book[] => {
   const lines = csv.trim().split('\n');
   return lines.slice(1).map((line, index) => {
-    const values = line.split(',');
+    // Simple CSV parser that handles commas inside quotes
+    const regex = /(".*?"|[^,]+)(?=\s*,|\s*$)/g;
+    const values = line.match(regex)?.map(v => v.replace(/^"|"$/g, '')) || [];
+    
     const title = values[0] || 'Unknown Title';
     const author = values[1] || 'Unknown Author';
-    const genere = values[2] || 'General';
+    const genre = values[2] || 'General';
     const url = values[3] || '';
     
     return {
       id: `csv-${index}`,
       title,
       author,
-      genre: genere,
-      summary: `A highly recommended ${genere} title from the community catalog.`,
+      genre,
+      summary: `A highly recommended ${genre} title.`,
       coverUrl: url,
       status: ReadingStatus.OWNED,
+      condition: BookCondition.GOOD,
       addedAt: Date.now(),
       language: 'English',
       isbn: url
@@ -99,21 +87,12 @@ export async function identifyBookFromImage(base64Image: string) {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                mimeType: 'image/jpeg',
-                data: base64Image,
-              },
-            },
-            {
-              text: 'Analyze this book cover image. Extract title, author, genre, summary, and ISBN. Return JSON.',
-            },
-          ],
-        },
-      ],
+      contents: [{
+        parts: [
+          { inlineData: { mimeType: 'image/jpeg', data: base64Image } },
+          { text: 'Analyze this book image. Extract metadata (title, author, genre, summary, ISBN). ALSO assess its physical condition: is it "New", "Good", "Vintage", or "Worn"? Provide a short note on the condition (e.g., "Sharp edges", "Yellowed pages"). Return JSON.' }
+        ]
+      }],
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -124,15 +103,15 @@ export async function identifyBookFromImage(base64Image: string) {
             isbn: { type: Type.STRING },
             genre: { type: Type.STRING },
             summary: { type: Type.STRING },
+            condition: { type: Type.STRING, description: 'Must be one of: New, Good, Vintage, Worn' },
+            conditionNote: { type: Type.STRING }
           },
-          required: ['title', 'author', 'genre', 'summary'],
+          required: ['title', 'author', 'genre', 'summary', 'condition', 'conditionNote'],
         },
       },
     });
     
     const detected = JSON.parse(response.text || '{}');
-    
-    // Attempt to enrich with Google Books for high quality image
     const official = await getGoogleBooksMetadata(detected.title, detected.author, detected.isbn);
     if (official && official.coverUrl) {
       return { 
@@ -142,7 +121,6 @@ export async function identifyBookFromImage(base64Image: string) {
         author: official.officialAuthor || detected.author
       };
     }
-    
     return detected;
   } catch (error) {
     console.error("Error identifying book:", error);
@@ -159,17 +137,12 @@ export async function searchBookByTitle(query: string) {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            author: { type: Type.STRING }
-          }
+          properties: { title: { type: Type.STRING }, author: { type: Type.STRING } }
         },
       }
     });
-    
     const refined = JSON.parse(refineResponse.text || '{}');
     const official = await getGoogleBooksMetadata(refined.title || query, refined.author);
-
     if (official) {
       return {
         title: official.officialTitle || refined.title || query,
@@ -177,93 +150,84 @@ export async function searchBookByTitle(query: string) {
         genre: official.genre || 'Literary',
         summary: official.description?.substring(0, 300) + '...' || 'No summary available.',
         coverUrl: official.coverUrl || `https://picsum.photos/seed/${query.replace(/\s/g, '')}/400/600`,
-        isbn: official.isbn
+        isbn: official.isbn,
+        condition: BookCondition.GOOD,
+        conditionNote: 'Defaulted for digital search.'
       };
     }
-
-    const fallbackResponse = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Provide details for: "${query}". Return JSON.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            author: { type: Type.STRING },
-            genre: { type: Type.STRING },
-            summary: { type: Type.STRING },
-          },
-          required: ['title', 'author', 'genre', 'summary'],
-        },
-      },
-    });
-
-    const fallbackData = JSON.parse(fallbackResponse.text || '{}');
     return {
-      ...fallbackData,
-      coverUrl: `https://picsum.photos/seed/${fallbackData.title.replace(/\s/g, '')}/400/600`
+      title: query,
+      author: 'Unknown',
+      genre: 'General',
+      summary: 'Manually searched book.',
+      coverUrl: `https://picsum.photos/seed/${query.replace(/\s/g, '')}/400/600`,
+      condition: BookCondition.GOOD,
+      conditionNote: 'Defaulted for digital search.'
     };
-  } catch (error) {
-    console.error("Error searching book:", error);
-    throw error;
-  }
+  } catch (error) { throw error; }
 }
 
 function getGenreChunks(books: Book[]): Record<string, string> {
   const chunks: Record<string, string> = {};
   books.forEach(book => {
     if (!chunks[book.genre]) chunks[book.genre] = "";
-    chunks[book.genre] += `- ${book.title} by ${book.author}\n`;
+    chunks[book.genre] += `- ${book.title} by ${book.author} (ID: ${book.id})\n`;
   });
   return chunks;
 }
 
 export async function getBookRecommendations(
-  userHistory: { current: {title: string, genre: string}[], past: {title: string, genre: string}[] },
-  csvBooks: Book[],
-  friendsBooks: Book[],
+  userHistory: { current: {title: string, genre: string}[], past: {title: string, genre: string}[] }, 
+  csvBooks: Book[], 
+  friendsBooks: Book[], 
   userOwnedTitles: string[]
 ) {
   try {
     const ownedSet = new Set(userOwnedTitles.map(t => t.toLowerCase().trim()));
-    const availableFriendsBooks = friendsBooks.filter(b => !ownedSet.has(b.title.toLowerCase().trim()));
-    const availableCsvBooks = csvBooks.filter(b => !ownedSet.has(b.title.toLowerCase().trim()));
-
-    const neighborChunks = getGenreChunks(availableFriendsBooks);
-    const csvChunks = getGenreChunks(availableCsvBooks);
     
-    const historyGenres = new Set([
-      ...userHistory.current.map(b => b.genre),
-      ...userHistory.past.map(b => b.genre)
-    ]);
+    // Categorize available books
+    const availableNeighbors = friendsBooks.filter(b => !ownedSet.has(b.title.toLowerCase().trim()));
+    const availableCatalog = csvBooks.filter(b => !ownedSet.has(b.title.toLowerCase().trim()));
 
-    let extendedContext = "AVAILABLE BOOK POOL CONTEXT:\n";
-    historyGenres.forEach(genre => {
-      extendedContext += `Genre: ${genre}\n`;
-      if (neighborChunks[genre]) extendedContext += `[From Neighbors]:\n${neighborChunks[genre]}`;
-      else if (csvChunks[genre]) extendedContext += `[From Community Catalog]:\n${csvChunks[genre]}`;
-      extendedContext += "---\n";
-    });
+    const neighborGenreContext = getGenreChunks(availableNeighbors);
+    const catalogGenreContext = getGenreChunks(availableCatalog);
 
-    const allAvailableBooks = [...availableFriendsBooks, ...availableCsvBooks];
-    const availablePoolStr = allAvailableBooks
-      .map(b => `${b.title} by ${b.author} (ID: ${b.id})`)
-      .join(', ');
+    const historySummary = userHistory.current.map(b => `${b.title} (${b.genre})`).join(', ') + 
+                          ' | Past: ' + 
+                          userHistory.past.map(b => `${b.title} (${b.genre})`).join(', ');
+
+    const prompt = `
+      You are an AI Librarian for Shelf2Street. Recommend 3 books.
+      
+      USER INTERESTS:
+      ${historySummary}
+      
+      AVAILABLE FROM NEIGHBORS (PRIORITIZE THESE):
+      ${JSON.stringify(neighborGenreContext)}
+      
+      AVAILABLE FROM GLOBAL CATALOG (FALLBACK):
+      ${JSON.stringify(catalogGenreContext)}
+      
+      RULES:
+      1. Prioritize books from "NEIGHBORS" to encourage local community sharing.
+      2. Match recommendations to the genres or themes in USER INTERESTS.
+      3. Return ONLY valid IDs from the provided lists.
+      4. Provide a warm, helpful reason for each recommendation.
+    `;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Recommend 3 books from the pool. Exclude: [${userOwnedTitles.join(', ')}]. JSON Output.`,
+      contents: prompt,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.ARRAY,
           items: {
             type: Type.OBJECT,
-            properties: {
-              bookId: { type: Type.STRING },
-              reason: { type: Type.STRING },
-              sourceType: { type: Type.STRING }
+            properties: { 
+              bookId: { type: Type.STRING }, 
+              reason: { type: Type.STRING }, 
+              sourceType: { type: Type.STRING, description: 'neighbor or catalog' } 
             },
             required: ['bookId', 'reason', 'sourceType']
           }
@@ -272,8 +236,8 @@ export async function getBookRecommendations(
     });
 
     return JSON.parse(response.text || '[]');
-  } catch (error) {
-    console.error("RAG Error:", error);
-    return [];
+  } catch (error) { 
+    console.error("RAG recommendation error:", error);
+    return []; 
   }
 }
