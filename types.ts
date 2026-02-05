@@ -50,3 +50,9 @@ export interface Friend {
   avatar: string;
   privacy: PrivacyMode;
 }
+export type Row = {
+  title: string;
+  authors: string;
+  genre: string;
+  thumbnail:string;
+};

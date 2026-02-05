@@ -36,11 +36,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onJoin, onSignIn, featuredBoo
             <span className="text-xs font-bold tracking-widest uppercase">Verified Neighbors Only</span>
           </div>
           <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6">
-            Read More. Spend less Share Always, <br/>
-            <span className="text-indigo-400">from My Home to Aparna.</span>
+            Shelf2Street​ <br/>
+            <span className="text-indigo-400">Read More, Spend less Share Always.</span>
           </h1>
           <p className="text-xl text-slate-300 max-w-2xl mx-auto mb-10">
-            Swap books in your apartment or neighborhood.Discover local readers. Keep stories moving -— because the best libraries are shared.
+            from My Home to Aparna-- Swap books in your apartment or neighborhood.Discover local readers. Keep stories moving -— because the best libraries are shared.
           </p>
           
           <div className="flex flex-col items-center gap-6">

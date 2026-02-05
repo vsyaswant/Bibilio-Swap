@@ -5,35 +5,48 @@ import { Book, ReadingStatus } from "../types";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // The content of reco.csv as requested.
-export const RECO_CSV_CONTENT = `title,author,genere,url
-The God and the Gwisin,Kim Young-ha,Fantasy,https://www.goodreads.com/book/show/218662681-the-god-and-the-gwisin
-House of Idyl,Lucy Gray,Romance,https://www.goodreads.com/book/show/223407042-house-of-idyll
-Project Hail Mary,Andy Weir,Sci-Fi,https://www.goodreads.com/book/show/54493401-project-hail-mary
-Dune,Frank Herbert,Sci-Fi,https://www.goodreads.com/book/show/44767458-dune
-Atomic Habits,James Clear,Self-Help,https://www.goodreads.com/book/show/40121378-atomic-habits
-The Alchemist,Paulo Coelho,Fantasy,https://www.goodreads.com/book/show/112503.The_Alchemist
-Circe,Madeline Miller,Fantasy,https://www.goodreads.com/book/show/35959740-circe
-People We Meet on Vacation,Emily Henry,Romance,https://www.goodreads.com/book/show/54985743-people- we-meet-on-vacation
-Normal People,Sally Rooney,Romance,https://www.goodreads.com/book/show/41057294-normal-people
-The Midnight Library,Matt Haig,Fantasy,https://www.goodreads.com/book/show/52578297-the-midnight-library
-Clean Code,Robert C. Martin,Tech,https://www.goodreads.com/book/show/3735293-clean-code
-System Design Interview,Alex Xu,Tech,https://www.goodreads.com/book/show/54134074-system-design-interview`;
+export const RECO_CSV_CONTENT = `title,authors,genre,thumbnail
+Gilead,Marilynne Robinson,Fiction,http://books.google.com/books/content?id=KQZCPgAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api
+Spider's Web,Charles Osborne;Agatha Christie,Detective and mystery stories,http://books.google.com/books/content?id=gA5GPgAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api
+The One Tree,Stephen R. Donaldson,American fiction,http://books.google.com/books/content?id=OmQawwEACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api
+Rage of angels,Sidney Sheldon,Fiction,http://books.google.com/books/content?id=FKo2TgANz74C&printsec=frontcover&img=1&zoom=1&source=gbs_api
+The Four Loves,Clive Staples Lewis,Christian life,http://books.google.com/books/content?id=XhQ5XsFcpGIC&printsec=frontcover&img=1&zoom=1&source=gbs_api
+The Problem of Pain,Clive Staples Lewis,Christian life,http://books.google.com/books/content?id=Kk-uVe5QK-gC&printsec=frontcover&img=1&zoom=1&source=gbs_api
+An Autobiography,Agatha Christie,"Authors, English",http://books.google.com/books/content?id=c49GQwAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api
+Empires of the Monsoon,Richard Hall,"Africa, East",http://books.google.com/books/content?id=MuPEQgAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api
+The Gap Into Madness,Stephen R. Donaldson,"Hyland, Morn (Fictitious character)",http://books.google.com/books/content?id=4oXavLNDWocC&printsec=frontcover&img=1&zoom=1&source=gbs_api
+Master of the Game,Sidney Sheldon,Adventure stories,http://books.google.com/books/content?id=TkTYp-Tp6_IC&printsec=frontcover&img=1&zoom=1&source=gbs_api
+If Tomorrow Comes,Sidney Sheldon,Adventure stories,http://books.google.com/books/content?id=l2tBi_jLuk8C&printsec=frontcover&img=1&zoom=1&source=gbs_api
+Assassin's Apprentice,Robin Hobb,American fiction,http://books.google.com/books/content?id=qTaGQgAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api
+Warhost of Vastmark,Janny Wurts,Fiction,http://books.google.com/books/content?id=uOL0fpS9WZkC&printsec=frontcover&img=1&zoom=1&source=gbs_api
+The Once and Future King,Terence Hanbury White,Arthurian romances,http://books.google.com/books/content?id=Jx6BvgEACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api
+Murder in LaMut,Raymond E. Feist;Joel Rosenberg,Adventure stories,http://books.google.com/books/content?id=I2jbBlMHlAMC&printsec=frontcover&img=1&zoom=1&source=gbs_api
+Jimmy the Hand,Raymond E. Feist;S. M. Stirling,Fantasy fiction,http://books.google.com/books/content?id=hV4-oITYFN8C&printsec=frontcover&img=1&zoom=1&source=gbs_api
+Well of Darkness,Margaret Weis;Tracy Hickman,,http://books.google.com/books/content?id=XrwaAAAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api
+Witness for the Prosecution & Selected Plays,Agatha Christie,English drama,http://books.google.com/books/content?id=_9u7AAAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api
+The Little House,Philippa Gregory,Country life,http://books.google.com/books/content?id=rbvUPps9vKsC&printsec=frontcover&img=1&zoom=1&source=gbs_api`;
 
 /**
- * Fetches the official cover image from Google Books API.
+ * Fetches the official cover image and metadata from Google Books API.
  */
-async function getGoogleBooksMetadata(title: string, author?: string, isbn?: string) {
+export async function getGoogleBooksMetadata(title: string, author?: string, isbn?: string) {
   try {
     let query = '';
-    if (isbn) query = `isbn:${isbn.replace(/[^0-9X]/gi, '')}`;
-    else query = `intitle:${encodeURIComponent(title)}${author ? `+inauthor:${encodeURIComponent(author)}` : ''}`;
+    if (isbn && isbn.length > 5) {
+      query = `isbn:${isbn.replace(/[^0-9X]/gi, '')}`;
+    } else {
+      // Clean query for better matching
+      const cleanTitle = title.replace(/[^\w\s]/gi, '');
+      const cleanAuthor = author ? author.replace(/[^\w\s]/gi, '') : '';
+      query = `intitle:${encodeURIComponent(cleanTitle)}${cleanAuthor ? `+inauthor:${encodeURIComponent(cleanAuthor)}` : ''}`;
+    }
 
-    const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`);
+    const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=3`);
     const data = await response.json();
 
     if (data.items && data.items.length > 0) {
+      // Find the best match (sometimes first isn't best if query was broad)
       const info = data.items[0].volumeInfo;
-      // Get the highest resolution image available
       const cover = info.imageLinks?.extraLarge || 
                     info.imageLinks?.large || 
                     info.imageLinks?.medium || 
@@ -45,7 +58,8 @@ async function getGoogleBooksMetadata(title: string, author?: string, isbn?: str
         officialTitle: info.title,
         officialAuthor: info.authors?.join(', '),
         description: info.description,
-        isbn: info.industryIdentifiers?.[0]?.identifier
+        genre: info.categories?.[0] || 'General',
+        isbn: info.industryIdentifiers?.find((id: any) => id.type.includes('ISBN'))?.identifier
       };
     }
   } catch (err) {
@@ -72,7 +86,7 @@ export const parseRecoCSV = (csv: string): Book[] => {
       author,
       genre: genere,
       summary: `A highly recommended ${genere} title from the community catalog.`,
-      coverUrl: `https://picsum.photos/seed/${title.replace(/\s/g, '')}/400/600`,
+      coverUrl: url,
       status: ReadingStatus.OWNED,
       addedAt: Date.now(),
       language: 'English',
@@ -121,7 +135,12 @@ export async function identifyBookFromImage(base64Image: string) {
     // Attempt to enrich with Google Books for high quality image
     const official = await getGoogleBooksMetadata(detected.title, detected.author, detected.isbn);
     if (official && official.coverUrl) {
-      return { ...detected, coverUrl: official.coverUrl };
+      return { 
+        ...detected, 
+        coverUrl: official.coverUrl,
+        title: official.officialTitle || detected.title,
+        author: official.officialAuthor || detected.author
+      };
     }
     
     return detected;
@@ -131,15 +150,11 @@ export async function identifyBookFromImage(base64Image: string) {
   }
 }
 
-/**
- * Search for book details by text query using Google Books data.
- */
 export async function searchBookByTitle(query: string) {
   try {
-    // 1. Use Gemini to refine the query and understand the book context
     const refineResponse = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `User wants to find a book with this query: "${query}". Identify the likely Title and Author. Output JSON.`,
+      contents: `User query: "${query}". Identify Title and Author. Output JSON.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -153,27 +168,22 @@ export async function searchBookByTitle(query: string) {
     });
     
     const refined = JSON.parse(refineResponse.text || '{}');
-    const title = refined.title || query;
-    const author = refined.author || '';
-
-    // 2. Query Google Books for the real data and high-res cover
-    const official = await getGoogleBooksMetadata(title, author);
+    const official = await getGoogleBooksMetadata(refined.title || query, refined.author);
 
     if (official) {
       return {
-        title: official.officialTitle || title,
-        author: official.officialAuthor || author,
-        genre: 'Literary', // Fallback or could be parsed from categories
+        title: official.officialTitle || refined.title || query,
+        author: official.officialAuthor || refined.author || 'Unknown Author',
+        genre: official.genre || 'Literary',
         summary: official.description?.substring(0, 300) + '...' || 'No summary available.',
-        coverUrl: official.coverUrl || `https://picsum.photos/seed/${title.replace(/\s/g, '')}/400/600`,
+        coverUrl: official.coverUrl || `https://picsum.photos/seed/${query.replace(/\s/g, '')}/400/600`,
         isbn: official.isbn
       };
     }
 
-    // 3. Last fallback: Pure Gemini generation if API fails or find nothing
     const fallbackResponse = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Provide details for the book: "${query}". Return JSON with title, author, genre, summary.`,
+      contents: `Provide details for: "${query}". Return JSON.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -200,21 +210,15 @@ export async function searchBookByTitle(query: string) {
   }
 }
 
-// Added helper to group books by genre and return string chunks for RAG context.
 function getGenreChunks(books: Book[]): Record<string, string> {
   const chunks: Record<string, string> = {};
   books.forEach(book => {
-    if (!chunks[book.genre]) {
-      chunks[book.genre] = "";
-    }
+    if (!chunks[book.genre]) chunks[book.genre] = "";
     chunks[book.genre] += `- ${book.title} by ${book.author}\n`;
   });
   return chunks;
 }
 
-/**
- * Hierarchical RAG Recommendation logic stays the same but filters pool.
- */
 export async function getBookRecommendations(
   userHistory: { current: {title: string, genre: string}[], past: {title: string, genre: string}[] },
   csvBooks: Book[],
@@ -249,18 +253,7 @@ export async function getBookRecommendations(
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `You are a sophisticated AI Librarian. 
-      Recommend exactly 3 books from the AVAILABLE POOL. 
-      NEVER recommend books the user already owns: [${userOwnedTitles.join(', ')}].
-      Prioritize Neighbors.
-      
-      CONTEXT:
-      ${extendedContext}
-      
-      POOL:
-      [${availablePoolStr}]
-      
-      Output JSON: [{ "bookId": string, "reason": string, "sourceType": "neighbor" | "catalog" }]`,
+      contents: `Recommend 3 books from the pool. Exclude: [${userOwnedTitles.join(', ')}]. JSON Output.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {

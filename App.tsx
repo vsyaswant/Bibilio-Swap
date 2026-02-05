@@ -7,10 +7,10 @@ import DiscoverView from './components/DiscoverView';
 import LandingPage from './components/LandingPage';
 import AuthView from './components/AuthView';
 import NeighborProfileView from './components/NeighborProfileView';
-import { getBookRecommendations, parseRecoCSV, RECO_CSV_CONTENT } from './services/geminiService';
+import { getBookRecommendations, parseRecoCSV, RECO_CSV_CONTENT, getGoogleBooksMetadata } from './services/geminiService';
 import { Book, UserProfile, ReadingStatus, PrivacyMode, TradeRequest } from './types';
 
-// Updated Mock Data with specific requested avatar URLs
+// Updated Mock Data
 const MOCK_OTHER_USERS: UserProfile[] = [
   {
     id: 'user-2',
@@ -75,14 +75,14 @@ const MOCK_OTHER_USERS: UserProfile[] = [
     library: [
       {
         id: 'b4',
-        title: 'Naa saavu nen sastha neekenduku',
+        title: 'Naa Saavedo nen sastha neekenduku',
         author: 'Kaushik',
         genre: 'Self-Help',
         summary: 'A tiny changes, remarkable results strategy for habit formation.',
         coverUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT2cGw-Rof73vL4ToyGGt1NS_McIjFn4FQpFQ&s',
         status: ReadingStatus.OWNED,
         addedAt: Date.now(),
-        language: 'English'
+        language: 'Telugu'
       },
       {
         id: 'b5',
@@ -90,7 +90,7 @@ const MOCK_OTHER_USERS: UserProfile[] = [
         author: 'Paulo Coelho',
         genre: 'Fiction',
         summary: 'Follow your dream fable.',
-        coverUrl: 'https://picsum.photos/seed/alchemist/400/600',
+        coverUrl: 'https://images.squarespace-cdn.com/content/v1/59de8d6fbebafb493794e056/1558530073213-OP51JP2VJ1CJOY7SVQX1/The-Alchemist-Paulo-Coelho-25th-Anniversary-Edition.jpg?format=1500w',
         status: ReadingStatus.OWNED,
         addedAt: Date.now(),
         language: 'English'
@@ -100,7 +100,7 @@ const MOCK_OTHER_USERS: UserProfile[] = [
 ];
 
 const MOCK_TRADES: TradeRequest[] = [
-  { id: 't1', bookTitle: 'System Design Interview', fromUser: 'Vinay', status: 'approved', type: 'incoming', dropOffNote: 'Left at Gate 2' },
+  { id: 't1', bookTitle: 'Cracking the PM Interview', fromUser: 'Vinay', status: 'approved', type: 'incoming', dropOffNote: 'Left at Gate 2' },
   { id: 't2', bookTitle: 'Atomic Habits', fromUser: 'Nikhil', status: 'pending', type: 'outgoing', dropOffNote: 'Meeting at Clubhouse' }
 ];
 
@@ -115,6 +115,7 @@ const App: React.FC = () => {
   const [languageFilter, setLanguageFilter] = useState<'All' | 'English' | 'Telugu' | 'Hindi'>('All');
   const [recommendations, setRecommendations] = useState<{book: Book, reason: string, sourceType: string}[]>([]);
   const [isRecLoading, setIsRecLoading] = useState(false);
+  const [neighbors, setNeighbors] = useState<UserProfile[]>(MOCK_OTHER_USERS);
   
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
     const saved = localStorage.getItem('biblio_user');
@@ -132,15 +133,46 @@ const App: React.FC = () => {
   const csvBooks = useMemo(() => parseRecoCSV(RECO_CSV_CONTENT), []);
 
   const friendsBooks = useMemo(() => {
-    return MOCK_OTHER_USERS
+    return neighbors
       .filter(u => userProfile.friends.includes(u.id))
       .flatMap(u => u.library.map(b => ({ ...b, ownerName: u.name })));
-  }, [userProfile.friends]);
+  }, [userProfile.friends, neighbors]);
+
+  // Initial Cover Hydration - Replace placeholders with real covers
+  useEffect(() => {
+    const hydrateCovers = async () => {
+      // 1. Hydrate User Library
+      const hydrateList = async (list: Book[]) => {
+        return Promise.all(list.map(async (book) => {
+          if (book.coverUrl.includes('picsum.photos')) {
+            const meta = await getGoogleBooksMetadata(book.title, book.author);
+            if (meta?.coverUrl) return { ...book, coverUrl: meta.coverUrl };
+          }
+          return book;
+        }));
+      };
+
+      if (userProfile.library.length > 0) {
+        const newLib = await hydrateList(userProfile.library);
+        setUserProfile(prev => ({ ...prev, library: newLib }));
+      }
+
+      // 2. Hydrate Neighbors
+      const newNeighbors = await Promise.all(neighbors.map(async (neighbor) => {
+        const newLib = await hydrateList(neighbor.library);
+        return { ...neighbor, library: newLib };
+      }));
+      setNeighbors(newNeighbors);
+    };
+
+    if (authStep === 'authenticated') {
+      hydrateCovers();
+    }
+  }, [authStep]);
 
   useEffect(() => {
     if (authStep === 'authenticated') {
       const fetchRecs = async () => {
-        // We still fetch recs even if library is empty, to jumpstart experience
         setIsRecLoading(true);
         const current = userProfile.library
           .filter(b => b.status === ReadingStatus.CURRENT)
@@ -148,7 +180,7 @@ const App: React.FC = () => {
         const past = userProfile.library
           .filter(b => b.status === ReadingStatus.PAST)
           .sort((a, b) => b.addedAt - a.addedAt)
-          .slice(0, 5) // Use more history for better matching
+          .slice(0, 5)
           .map(b => ({ title: b.title, genre: b.genre }));
 
         const ownedTitles = userProfile.library.map(b => b.title);
@@ -185,8 +217,8 @@ const App: React.FC = () => {
       author: bookData.author || 'Unknown Author',
       genre: bookData.genre || 'General',
       summary: bookData.summary || 'No summary available.',
-      coverUrl: coverImage,
-      status: forcedStatus || ReadingStatus.OWNED, // Search defaults to PAST in BookScanner, scan defaults to OWNED
+      coverUrl: bookData.coverUrl || coverImage,
+      status: forcedStatus || ReadingStatus.OWNED,
       addedAt: Date.now(),
       language: 'English'
     };
@@ -216,8 +248,8 @@ const App: React.FC = () => {
   };
 
   const selectedNeighbor = useMemo(() => {
-    return MOCK_OTHER_USERS.find(u => u.id === selectedNeighborId);
-  }, [selectedNeighborId]);
+    return neighbors.find(u => u.id === selectedNeighborId);
+  }, [selectedNeighborId, neighbors]);
 
   if (authStep === 'landing') return <LandingPage onJoin={() => setAuthStep('signup')} onSignIn={() => setAuthStep('login')} featuredBooks={csvBooks} />;
   
@@ -244,7 +276,7 @@ const App: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             <div className="lg:col-span-3 space-y-10">
               
-              {/* Recommendations Rail - Neighbor First RAG */}
+              {/* Recommendations Rail */}
               {(recommendations.length > 0 || isRecLoading) && (
                 <section className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-sm relative overflow-hidden">
                    <div className="absolute top-0 right-0 p-4">
@@ -361,7 +393,7 @@ const App: React.FC = () => {
                <div className="bg-white rounded-[2rem] border border-slate-200 p-8 shadow-sm">
                  <h3 className="font-black text-slate-900 mb-6 uppercase text-[10px] tracking-widest">Active Neighbors</h3>
                  <div className="space-y-6">
-                    {MOCK_OTHER_USERS.filter(u => userProfile.friends.includes(u.id)).map((neighbor) => (
+                    {neighbors.filter(u => userProfile.friends.includes(u.id)).map((neighbor) => (
                       <div key={neighbor.id} onClick={() => openNeighborProfile(neighbor.id)} className="flex items-center space-x-3 cursor-pointer group">
                         <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden ring-2 ring-slate-50 group-hover:ring-indigo-100 transition-all">
                           <img src={neighbor.avatar} alt={neighbor.name} className="w-full h-full object-cover" />
@@ -382,7 +414,7 @@ const App: React.FC = () => {
         {view === 'discover' && (
           <div className="space-y-12 py-8">
             <h1 className="text-3xl font-extrabold text-slate-900">Community Shelf</h1>
-            <p className="text-slate-500 max-w-2xl -mt-8">Browsing master catalog from <code>reco.csv</code> and shared local libraries.</p>
+            <p className="text-slate-500 max-w-2xl -mt-8">Browsing master catalog from community favorites and shared local libraries.</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
               {csvBooks.map(book => <BookCard key={book.id} book={book} isReadOnly />)}
             </div>
@@ -396,7 +428,7 @@ const App: React.FC = () => {
               <p className="text-slate-500">Residents in your immediate community circles.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {MOCK_OTHER_USERS.map(friend => (
+              {neighbors.map(friend => (
                 <div key={friend.id} onClick={() => openNeighborProfile(friend.id)} className="bg-white p-6 rounded-[2.5rem] border border-slate-200 flex items-center space-x-6 hover:shadow-xl transition-all hover:scale-[1.02] cursor-pointer group">
                   <div className="w-20 h-20 rounded-2xl bg-indigo-50 flex-shrink-0 overflow-hidden border border-slate-100 shadow-sm">
                     <img src={friend.avatar} alt={friend.name} className="w-full h-full object-cover" />
