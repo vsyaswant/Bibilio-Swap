@@ -1,5 +1,5 @@
 {
-  "name": "BiblioSwap - Book Exchange & Library",
+  "name": "Shelf2Street - Book Exchange & Library",
   "description": "A social book exchange platform where users can scan their physical books to build a digital library, share with friends, and manage their reading progress.",
   "requestFramePermissions": [
     "camera"

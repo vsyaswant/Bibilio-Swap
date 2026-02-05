@@ -1,15 +1,14 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Book } from '../types';
 
 interface LandingPageProps {
   onJoin: () => void;
+  onSignIn: () => void;
   featuredBooks: Book[];
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ onJoin, featuredBooks }) => {
-  const [zip, setZip] = useState('');
-
+const LandingPage: React.FC<LandingPageProps> = ({ onJoin, onSignIn, featuredBooks }) => {
   const hotspots = [
     { name: 'Gachibowli', count: 450 },
     { name: 'Jubilee Hills', count: 320 },
@@ -37,32 +36,28 @@ const LandingPage: React.FC<LandingPageProps> = ({ onJoin, featuredBooks }) => {
             <span className="text-xs font-bold tracking-widest uppercase">Verified Neighbors Only</span>
           </div>
           <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6">
-            Your community’s library, <br/>
-            <span className="text-indigo-400">from My Home to MyScape.</span>
+            Read More. Spend less Share Always, <br/>
+            <span className="text-indigo-400">from My Home to Aparna.</span>
           </h1>
           <p className="text-xl text-slate-300 max-w-2xl mx-auto mb-10">
-            Exclusive to Hyderabad’s premier gated communities. Browse books within your society walls or just across the block in Financial District.
+            Swap books in your apartment or neighborhood.Discover local readers. Keep stories moving -— because the best libraries are shared.
           </p>
           
-          <div className="max-w-md mx-auto flex flex-col sm:flex-row gap-3 shadow-2xl rounded-2xl p-2 bg-white/10 backdrop-blur-xl border border-white/20">
-            <input 
-              type="text" 
-              placeholder="Your Society or Pin Code" 
-              className="flex-grow px-4 py-3 rounded-xl bg-transparent focus:outline-none text-white placeholder-white/50"
-              value={zip}
-              onChange={(e) => setZip(e.target.value)}
-            />
+          <div className="flex flex-col items-center gap-6">
             <button 
               onClick={onJoin}
-              className="bg-indigo-500 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-400 transition-all whitespace-nowrap"
+              className="bg-indigo-600 text-white px-16 py-5 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-indigo-500 hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-indigo-500/20"
             >
-              See Books Nearby
+              Join Now
             </button>
+            <p className="text-slate-400 text-sm font-medium">
+              Existing user? <button onClick={onSignIn} className="text-white hover:underline font-bold">Sign In here</button>
+            </p>
           </div>
           
-          <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
+          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
             {hotspots.map(h => (
-              <div key={h.name} className="bg-white/5 border border-white/10 p-4 rounded-2xl">
+              <div key={h.name} className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
                 <div className="text-indigo-400 font-bold text-xl">{h.count}+</div>
                 <div className="text-slate-400 text-xs uppercase tracking-tighter">{h.name}</div>
               </div>
@@ -116,7 +111,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onJoin, featuredBooks }) => {
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex justify-between items-end mb-12">
             <div>
-              <h2 className="text-3xl font-bold text-slate-900">Recently Added in My Home Abhra</h2>
+              <h2 className="text-3xl font-bold text-slate-900">Recently Added in Community</h2>
               <p className="text-slate-500">Join your society's private shelf to see more.</p>
             </div>
             <button onClick={onJoin} className="text-indigo-600 font-bold hover:underline">View Society Library →</button>

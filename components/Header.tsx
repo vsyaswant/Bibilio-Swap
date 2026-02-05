@@ -19,7 +19,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, userName, society
             </svg>
           </div>
           <div>
-            <span className="text-xl font-black tracking-tight text-slate-900 block leading-none">BiblioSwap</span>
+            <span className="text-xl font-black tracking-tight text-slate-900 block leading-none">Shelf2Street</span>
             {societyName && <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">{societyName}</span>}
           </div>
         </div>

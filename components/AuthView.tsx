@@ -20,20 +20,35 @@ const AuthView: React.FC<AuthViewProps> = ({ mode, onAuthSuccess, onToggleMode, 
     'My Home Bhooja',
     'Rajapushpa Atria',
     'My Home Mangala',
-    'MyScape Courtyard'
+    'MyScape Courtyard',
+    'Niharika Interlake'
   ];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate auth logic
-    onAuthSuccess({
-      name: mode === 'signup' ? name : 'Alex Reader',
-      society: mode === 'signup' ? society : 'My Home Abhra',
-    });
+    
+    if (mode === 'login') {
+      // Validate specific credentials
+      if (email.trim() === 'Dheeraj' && password === 'Test123') {
+        localStorage.setItem('biblio_auth', 'true');
+        onAuthSuccess({
+          name: 'Dheeraj',
+          society: 'Niharika Interlake',
+        });
+      } else {
+        alert("Invalid credentials. Try 'Dheeraj' with 'Test123'");
+      }
+    } else {
+      // Signup logic
+      localStorage.setItem('biblio_auth', 'true');
+      onAuthSuccess({
+        name: name || 'Resident',
+        society: society,
+      });
+    }
   };
 
   const handleSSO = (provider: string) => {
-    // Mock SSO integration
     alert(`Connecting to ${provider} for verification...`);
     onAuthSuccess({
       name: 'Verified Resident',
@@ -96,11 +111,13 @@ const AuthView: React.FC<AuthViewProps> = ({ mode, onAuthSuccess, onToggleMode, 
               </>
             )}
             <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Email Address</label>
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                {mode === 'login' ? 'Username / Email' : 'Email Address'}
+              </label>
               <input 
                 required
-                type="email" 
-                placeholder="name@community.com"
+                type="text" 
+                placeholder={mode === 'login' ? "Dheeraj" : "name@community.com"}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}

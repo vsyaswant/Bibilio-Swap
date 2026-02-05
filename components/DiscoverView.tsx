@@ -14,7 +14,7 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ otherUsers }) => {
     <div className="space-y-12 py-8">
       <div className="max-w-2xl">
         <h1 className="text-3xl font-extrabold text-slate-900 mb-2">Community Shelf</h1>
-        <p className="text-slate-500">Explore libraries shared by the BiblioSwap community. Connect with other readers and discover your next favorite book.</p>
+        <p className="text-slate-500">Explore libraries shared by the Shelf2Street community. Connect with other readers and discover your next favorite book.</p>
       </div>
 
       {publicUsers.length === 0 ? (
